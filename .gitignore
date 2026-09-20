@@ -39,3 +39,5 @@ __pycache__/
 .vscode/
 *.swp
 *.swo
+
+processed_data/
