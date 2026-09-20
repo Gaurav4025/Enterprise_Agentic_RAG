@@ -1,6 +1,7 @@
 from logfire._internal.json_schema import attributes_json_schema_properties
 import time
 import logfire
+from typing import Optional
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from app.config import settings
 
@@ -9,7 +10,9 @@ _GEMINI_DIM = 3072
 _FALLBACK_DIM = 768 
 
 _active_model = None
-_model_type: str | None = None # "gemini" or "fallback"
+# Line 13 becomes:
+_model_type: Optional[str] = None  # "gemini" or "fallback"
+
 
 def _probe_gemini():
     """Try one embed call to verify Gemini is reachable. Returns model or none."""
@@ -61,20 +64,20 @@ def _embed_batch(batch: list[str]) -> list[list[float]]:
                 return _active_model.embed_documents(batch)
             except Exception as e:
                 err = str(e).lower()
-                is_rate_limit = any(x in err for x in ("429", "rate","quota","resource_exhausted"))
+                is_rate_limit = any(x in err for x in ("429", "rate", "quota", "resource_exhausted"))
                 if is_rate_limit and attempt < 3:
-                    wait = 2 ** attempt 
+                    wait = 2 ** attempt
                     logfire.warning(
-                        f"Gemini rate limit hit - retrying in {wait}s"
+                        f"Gemini rate limit hit - retrying in {wait}s "
                         f"(attempt {attempt + 1}/4)."
-                    ) 
+                    )
                     time.sleep(wait)
                 else:
                     logfire.error(f"Gemini embedding failed: {e}")
-                    raise   
-            raise RuntimeError("Gemini rate limit persisted after 4 attempts.")
-        else:
-            return _active_model.encode(batch, show_progress_bar = False).tolist()
+                    raise
+        raise RuntimeError("Gemini rate limit persisted after 4 attempts.")
+    else:
+        return _active_model.encode(batch, show_progress_bar=False).tolist()
 
 
 

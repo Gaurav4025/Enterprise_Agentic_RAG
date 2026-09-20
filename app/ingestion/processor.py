@@ -14,7 +14,10 @@ from app.ingestion.loaders.html import parse_html
 from app.ingestion.loaders.text import parse_text
 from app.ingestion.chunking.splitter import chunk_text
 
-logfire.configure(service_name="enterprise-ingestion-service")
+logfire.configure(
+    service_name="enterprise-ingestion-service",
+    send_to_logfire="if-token-present",
+)
 
 # Local folder where parsed + chunked JSON metadata is saved (replaces GCS processed bucket)
 PROCESSED_DATA_DIR = "processed_data"

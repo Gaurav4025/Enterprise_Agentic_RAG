@@ -18,11 +18,14 @@ def chunk_text(text: str, chunk_size: int = 1500) -> List[str]:
         current_chunk = ""
 
         for p in paragraphs:
-            if len(current_chunk) + len(p) < chunk_size:
+            if len(current_chunk) + len(p) > chunk_size and current_chunk.strip():
                 chunks.append(current_chunk.strip())
-            current_chunk += p +  "\n\n"
+                current_chunk = ""
+            current_chunk += p + "\n\n"
 
         if current_chunk.strip():
             chunks.append(current_chunk.strip())
 
-        return chunks      
+        valid_chunks = [c for c in chunks if c.strip()]
+        logfire.info(f"Generated {len(valid_chunks)} chunks")
+        return valid_chunks

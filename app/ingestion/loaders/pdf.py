@@ -1,6 +1,5 @@
 import logfire
-from pypdf import PdfReader
-from pypdf.generic import PageObject
+from pypdf import PdfReader, PageObject
 import pdfplumber
 
 def parse_pdf(file_path: str) -> str:
@@ -19,7 +18,7 @@ def parse_pdf(file_path: str) -> str:
             blank_pages: list[int] = []
             # Iterate page by page → Extract text
 
-            for i, page in enumerate[PageObject](reader.pages):
+            for i, page in enumerate(reader.pages):
                 text = page.extract_text() or ""
                 if text.strip():
                     text_parts.append(text)

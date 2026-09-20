@@ -15,7 +15,7 @@ def parse_html(file_path: str):
             soup = BeautifulSoup(content, 'html.parser')
 
             # 1. Remove Junk (Scripts, styles, Metadata)
-            for script in soup[Tag](["script", "style", "meta","noscript"]):
+            for script in soup.find_all(["script", "style", "meta", "noscript"]):
                 script.decompose()
 
             # 2. Extract the text output
@@ -23,8 +23,7 @@ def parse_html(file_path: str):
 
             # 3. Clean whitespace (collapse multiple newLines)
             lines = (line.strip() for line in text.splitlines())
-            chunks = (phrase.strip() for line in lines for phrase in line.split(""))
-            text_clean = "\n".join(chunk for chunk in chunks if chunk)
+            text_clean = "\n".join(line for line in lines if line)
 
             return text_clean
 
