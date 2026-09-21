@@ -1,5 +1,6 @@
 import logfire
 import os
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -57,6 +58,7 @@ def query(request: QueryRequest):
         "current_query": q,
         "documents": [],
         "plan": ["Start"],
+        "execution_steps": [],
         "status": "Initializing Graph..."
     }
     
@@ -65,13 +67,20 @@ def query(request: QueryRequest):
     
     try:
         # Gate 1: NeMo Guardrails — blocks off-topic, jailbreaks, and handles dialog
+        guard_start = time.perf_counter()
         rail_fired, rail_response = guard(q)
+        guard_duration_ms = int((time.perf_counter() - guard_start) * 1000)
+        guard_step = {"stage": "Guardrails", "status": "success", "duration_ms": guard_duration_ms}
         if rail_fired:
             logfire.info(f"🛡️ Request blocked by guardrails | thread={thread_id}")
             return {
                 "question": q,
                 "answer": rail_response,
                 "thought_process": ["Intent: Guardrails Fired", "Retrieval: Skipped"],
+                "execution_steps": [
+                    guard_step,
+                    {"stage": "Blocked", "status": "blocked"}
+                ],
                 "status": "Blocked by guardrails.",
                 "sources": []
             }
@@ -84,6 +93,7 @@ def query(request: QueryRequest):
             "question": q,
             "answer": final_output.get("final_answer"),
             "thought_process": final_output.get("plan"),
+            "execution_steps": [guard_step] + final_output.get("execution_steps", []),
             "status": final_output.get("status"),
             "sources": final_output.get("documents", [])
         }
@@ -93,6 +103,7 @@ def query(request: QueryRequest):
             "question": q,
             "answer": "I apologize, but I encountered an internal error while processing your request. Please try again later.",
             "thought_process": ["Error encountered during execution."],
+            "execution_steps": [],
             "status": "error",
             "sources": []
         }

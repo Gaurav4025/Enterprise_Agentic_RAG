@@ -1,4 +1,5 @@
 import re
+import time
 from app.agents.state import AgentState
 from app.config import settings
 from langchain_groq import ChatGroq
@@ -38,7 +39,9 @@ def planner_node(state: AgentState):
     """
     
     with logfire.span(" Planner Decision"):
+        start_time = time.perf_counter()
         decision_raw = llm.invoke(prompt).content
+        duration_ms = int((time.perf_counter() - start_time) * 1000)
         decision = re.sub(r"<think>.*?</think>", "", decision_raw, flags=re.DOTALL).strip().strip('"\'')
         logfire.info(f"Intent identified: {decision}")
     
@@ -46,11 +49,17 @@ def planner_node(state: AgentState):
         return {
             "current_query": "CONVERSATIONAL",
             "status": "Handling conversationally (using memory)...",
-            "plan": ["Intent: Conversational/Memory", "Retrieval: Skipped"]
+            "plan": ["Intent: Conversational/Memory", "Retrieval: Skipped"],
+            "execution_steps": [
+                {"stage": "Planner", "status": "success", "duration_ms": duration_ms}
+            ],
         }
     
     return {
         "current_query": decision,
         "status": f"Technical research needed. Searching for: {decision}",
-        "plan": ["Intent: Technical", f"Search Term: {decision}"]
+        "plan": ["Intent: Technical", f"Search Term: {decision}"],
+        "execution_steps": [
+            {"stage": "Planner", "status": "success", "duration_ms": duration_ms}
+        ],
     }

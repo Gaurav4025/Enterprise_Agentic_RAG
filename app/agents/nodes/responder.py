@@ -1,4 +1,5 @@
 import re
+import time
 import logfire
 from app.agents.state import AgentState
 from app.config import settings
@@ -42,8 +43,10 @@ def generate_node(state: AgentState):
         full_context = ""
 
         for doc in state["documents"]:
-            if len(full_context) + len(doc) < max_context_chars:
-                full_context += doc + "\n\n"
+            content = doc.get("content", "") if isinstance(doc, dict) else str(doc)
+            formatted_doc = f"CONTENT: {content}"
+            if len(full_context) + len(formatted_doc) < max_context_chars:
+                full_context += formatted_doc + "\n\n"
             else:
                 logfire.warning("Context truncated to fit Groq TPM limits.")
                 break
@@ -63,6 +66,7 @@ def generate_node(state: AgentState):
         """
 
     with logfire.span(" LLM Synthesis"):
+        start_time = time.perf_counter()
         content = None
         is_cache_hit = False
 
@@ -100,9 +104,14 @@ def generate_node(state: AgentState):
             plan_update = state["plan"]
             status = "Response generated."
 
+        duration_ms = int((time.perf_counter() - start_time) * 1000)
+
         return {
             "final_answer": content,
             "status": status,
             "plan": plan_update,
-            "messages": [{"role": "assistant", "content": content}]
+            "messages": [{"role": "assistant", "content": content}],
+            "execution_steps": [
+                {"stage": "Generation", "status": "success", "duration_ms": duration_ms}
+            ],
         }

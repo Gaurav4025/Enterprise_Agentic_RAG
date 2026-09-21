@@ -29,10 +29,14 @@ def search_enterprise_knowledge(query: str, limit: int = 8):
 
         results = []
         for res in response.points:
+            payload = res.payload or {}
+            metadata = {k: v for k, v in payload.items() if k != "text"}
             results.append({
-                "content": res.payload.get("text", ""),
-                "source": res.payload.get("source", "Unknown"),
-                "score": res.score
+                "content": payload.get("text", ""),
+                "source": payload.get("source", "Unknown"),
+                "source_type": payload.get("source_type"),
+                "score": res.score,
+                "metadata": metadata,
             })
         
         return results

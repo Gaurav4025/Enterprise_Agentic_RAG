@@ -5,6 +5,7 @@ Enterprise Agentic RAG System
 
 import os
 import uuid
+import html
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -229,6 +230,47 @@ st.markdown("""
         margin-bottom: 6px;
     }
 
+    .source-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #d4d4d8;
+        font-size: 0.82rem;
+        line-height: 1.45;
+        margin: 6px 0;
+    }
+
+    .source-meta {
+        color: #71717a;
+        font-size: 0.74rem;
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .pipeline-row {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        color: #d4d4d8;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        padding: 5px 0;
+    }
+
+    .pipeline-status-ok {
+        color: #22c55e;
+    }
+
+    .pipeline-status-blocked,
+    .pipeline-status-error {
+        color: #ef4444;
+    }
+
+    .pipeline-duration {
+        color: #71717a;
+        text-align: right;
+    }
+
     /* Chat Input Bar */
     .stChatInputContainer, [data-testid="stChatInput"] {
         border-color: #27272a !important;
@@ -295,6 +337,94 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+
+def format_duration(duration_ms):
+    if duration_ms is None:
+        return ""
+    try:
+        duration_ms = float(duration_ms)
+    except (TypeError, ValueError):
+        return ""
+    if duration_ms >= 1000:
+        seconds = duration_ms / 1000
+        return f"{seconds:.1f}s" if seconds < 10 else f"{seconds:.0f}s"
+    return f"{duration_ms:.0f}ms"
+
+
+def normalize_source_entries(sources):
+    grouped = {}
+    if not isinstance(sources, list):
+        return []
+
+    section_keys = ("page", "page_number", "slide", "section", "heading", "title")
+
+    for src in sources:
+        if not isinstance(src, dict):
+            continue
+
+        metadata = src.get("metadata") if isinstance(src.get("metadata"), dict) else {}
+        source = src.get("source") or metadata.get("source") or metadata.get("filename")
+        if not source or source == "Unknown":
+            continue
+
+        entry = grouped.setdefault(source, {"source": source, "details": set()})
+        for key in section_keys:
+            value = src.get(key) or metadata.get(key)
+            if value is None or value == "":
+                continue
+            label = {
+                "page": "Page",
+                "page_number": "Page",
+                "slide": "Slide",
+                "section": "Section",
+                "heading": "Section",
+                "title": "Section",
+            }.get(key, key.title())
+            entry["details"].add(f"{label} {value}")
+
+    return list(grouped.values())
+
+
+def render_execution_steps(execution_steps, thought_process):
+    if execution_steps:
+        for step in execution_steps:
+            if not isinstance(step, dict):
+                continue
+            stage = html.escape(str(step.get("stage", "")))
+            status = str(step.get("status", "success")).lower()
+            duration = html.escape(format_duration(step.get("duration_ms")))
+            status_class = "pipeline-status-ok"
+            icon = "&check;"
+            if status in {"blocked", "error", "failed", "failure"}:
+                status_class = "pipeline-status-blocked" if status == "blocked" else "pipeline-status-error"
+                icon = "&times;"
+
+            st.markdown(f"""
+            <div class="pipeline-row">
+                <span class="{status_class}">{icon}</span>
+                <span>{stage}</span>
+                <span class="pipeline-duration">{duration}</span>
+            </div>
+            """, unsafe_allow_html=True)
+        return
+
+    for step in thought_process:
+        st.markdown(f'<div class="thought-step">{html.escape(str(step))}</div>', unsafe_allow_html=True)
+
+
+def render_sources(source_entries):
+    for entry in source_entries:
+        source_name = html.escape(os.path.basename(str(entry["source"]).replace("\\", "/")))
+        details = sorted(entry["details"])
+        detail_text = f'<span class="source-meta">{"; ".join(html.escape(detail) for detail in details)}</span>' if details else ""
+        st.markdown(f"""
+        <div class="source-line">
+            <span>&#128196;</span>
+            <span>{source_name}</span>
+            {detail_text}
+        </div>
+        """, unsafe_allow_html=True)
 
 
 # ── Session State Initialization ──────────────────────────────────────────────
@@ -369,7 +499,9 @@ with chat_area:
                 meta = msg.get("meta", {})
                 status = meta.get("status", "")
                 thought_process = meta.get("thought_process", [])
+                execution_steps = meta.get("execution_steps", [])
                 sources = meta.get("sources", [])
+                source_entries = normalize_source_entries(sources)
 
                 dot_class = "status-dot-cache" if ("Cache hit" in status or "⚡" in status) else "status-dot"
 
@@ -386,27 +518,14 @@ with chat_area:
                 """, unsafe_allow_html=True)
 
                 # Monochromatic expandable reasoning details
-                if thought_process or sources:
-                    col_exp1, col_exp2 = st.columns([1, 1])
-                    if thought_process:
-                        with col_exp1:
-                            with st.expander("Execution Steps", expanded=False):
-                                for step in thought_process:
-                                    st.markdown(f'<div class="thought-step">{step}</div>', unsafe_allow_html=True)
+                if execution_steps or thought_process or source_entries:
+                    if execution_steps or thought_process:
+                        with st.expander("Execution Steps", expanded=False):
+                            render_execution_steps(execution_steps, thought_process)
 
-                    if sources:
-                        with col_exp2:
-                            with st.expander(f"Retrieved Evidence ({len(sources)} sources)", expanded=False):
-                                for i, src in enumerate(sources[:4], 1):
-                                    text = src.replace("CONTENT: ", "").strip()
-                                    st.markdown(f"""
-                                    <div class="source-box">
-                                        <span class="source-tag">Source Chunk #{i}</span>
-                                        <p style="color:#a1a1aa; font-size:0.78rem; margin:4px 0 0 0; line-height:1.45;">
-                                            {text[:320]}{"…" if len(text) > 320 else ""}
-                                        </p>
-                                    </div>
-                                    """, unsafe_allow_html=True)
+                    if source_entries:
+                        with st.expander("Sources", expanded=False):
+                            render_sources(source_entries)
 
                 st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
 
@@ -453,6 +572,7 @@ if user_input and user_input.strip():
 
             answer = data.get("answer", "No response received.")
             thought_process = data.get("thought_process", [])
+            execution_steps = data.get("execution_steps", [])
             status = data.get("status", "")
             sources = data.get("sources", [])
 
@@ -464,6 +584,7 @@ if user_input and user_input.strip():
                 "content": answer,
                 "meta": {
                     "thought_process": thought_process,
+                    "execution_steps": execution_steps,
                     "status": status,
                     "sources": sources,
                 }
