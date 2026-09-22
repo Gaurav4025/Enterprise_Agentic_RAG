@@ -167,4 +167,3 @@ streamlit run evals/app.py
 
 ---
 
-*Built for High-Scale Enterprise Document Intelligence.*
