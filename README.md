@@ -165,5 +165,4 @@ streamlit run evals/app.py
 | 10 | [Evals](docs/10_EVALS.md) | RAGAS metrics theory and token budget |
 | 11 | [Evals Pipeline](docs/11_EVALS_PIPELINE.md) | Live eval pipeline and Streamlit demo |
 
----
 
